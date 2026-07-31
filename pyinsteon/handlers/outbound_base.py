@@ -53,6 +53,11 @@ class OutboundHandlerBase(InboundHandlerBase):
 
                 cleanup_done = get_cleanup_event(self._address)
                 if cleanup_done is not None:
+                    if not cleanup_done.is_set():
+                        _LOGGER.debug(
+                            "%s: deferring send until all-link cleanup completes",
+                            self._address,
+                        )
                     await cleanup_done.wait()
             # Empty the message queue
             while not self._message_response.empty():

@@ -83,24 +83,40 @@ class CleanUpManager:
         """Watch the device's inbound messages for cleanup start/end."""
         name = topic.getName() if hasattr(topic, "getName") else str(topic)
         if ALL_LINK_CLEANUP_STATUS_REPORT in name:
-            self._end_cleanup()
+            self._end_cleanup("status report")
         elif name.endswith(_BROADCAST_SUFFIX):
             self._start_cleanup()
 
     def _start_cleanup(self):
         """Enter the cleanup window: block outbound and arm the fallback timeout."""
-        self._cleanup_done.clear()
-        self._cancel_timeout()
+        # Acquire the loop *before* clearing the event: if there is no running
+        # loop we cannot arm the fallback timeout, and clearing without a timeout
+        # would leave outbound blocked forever.
         try:
             loop = asyncio.get_event_loop()
         except RuntimeError:
             return
-        self._timeout_handle = loop.call_later(self._timeout(), self._end_cleanup)
+        was_idle = self._cleanup_done.is_set()
+        timeout = self._timeout()
+        self._cleanup_done.clear()
+        self._cancel_timeout()
+        self._timeout_handle = loop.call_later(timeout, self._end_cleanup, "timeout")
+        if was_idle:
+            _LOGGER.debug(
+                "%s: all-link cleanup started; holding outbound (<= %.1fs)",
+                self._address,
+                timeout,
+            )
 
-    def _end_cleanup(self):
+    def _end_cleanup(self, reason="timeout"):
         """Exit the cleanup window: allow outbound again."""
         self._cancel_timeout()
+        if self._cleanup_done.is_set():
+            return
         self._cleanup_done.set()
+        _LOGGER.debug(
+            "%s: all-link cleanup done (%s); resuming outbound", self._address, reason
+        )
 
     def _cancel_timeout(self):
         if self._timeout_handle is not None:
