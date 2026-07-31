@@ -82,6 +82,48 @@ class TestNoSendDuringCleanup(unittest.TestCase):
 
             task.cancel()
 
+    @async_case
+    async def test_battery_keepawake_deferred_via_wake_path(self):
+        """The real #83 path: a battery on-wake command is queued, the device wakes
+        with its group broadcast (which both starts cleanup and triggers the battery
+        keep-awake), and the keep-awake must be deferred until the cleanup report.
+
+        This exercises the ordering: the broadcast dispatches to both the battery's
+        ``_device_awake`` (which schedules ``_ensure_commands`` -> keep-awake) and the
+        CleanUpManager; the event must be cleared synchronously so the deferred
+        keep-awake is gated.
+        """
+        from pyinsteon.constants import ResponseStatus
+
+        async with async_protocol_manager():
+            addr = random_address()
+            device = GeneralController_MiniRemote_4(
+                address=addr, cat=0x00, subcat=0x10, description="Mini Remote"
+            )
+            await asyncio.sleep(0.1)
+            pub.subscribe(self._record_send, "send")
+
+            # queue an on-wake command, exactly as ALDBBattery.async_load does
+            async def queued():
+                return ResponseStatus.SUCCESS
+
+            device._run_on_wake(queued)
+
+            # device wakes: group broadcast -> starts cleanup AND fires _device_awake
+            send_topics([TopicItem(
+                f"{addr.id}.1.on.all_link_broadcast",
+                cmd_kwargs(0x11, 0x00, None, target="000001", hops_left=3), 0)])
+            await asyncio.sleep(0.3)
+            keepawake = [s for s in self.sent if s.get("data2") == 0x04]
+            assert not keepawake, f"battery keep-awake sent during cleanup: {keepawake}"
+
+            # cleanup finishes -> keep-awake may now be transmitted
+            send_topics([TopicItem(
+                f"{addr.id}.all_link_cleanup_status_report.all_link_broadcast", {}, 0)])
+            await asyncio.sleep(0.3)
+            keepawake = [s for s in self.sent if s.get("data2") == 0x04]
+            assert keepawake, "battery keep-awake not sent after cleanup completed"
+
 
 if __name__ == "__main__":
     unittest.main()
