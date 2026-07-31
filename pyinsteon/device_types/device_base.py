@@ -19,6 +19,7 @@ from ..managers.get_set_ext_property_manager import GetSetExtendedPropertyManage
 from ..managers.get_set_op_flag_manager import GetSetOperatingFlagsManager
 from ..managers.link_manager.default_links import async_add_default_links
 from ..managers.status_manager import StatusManager
+from ..managers.cleanup_manager import CleanUpManager
 from ..topics import ENGINE_VERSION
 from ..utils import multiple_status, publish_topic
 
@@ -59,6 +60,7 @@ class Device(ABC):
         self._events = {}
 
         self._aldb = ALDB(self._address)
+        self._cleanup_manager = CleanUpManager(self)
         self._default_links = []
         self._operating_flags: Dict[str, OperatingFlag] = {}
         self._properties: Dict[str, ExtendedProperty] = {}
@@ -131,6 +133,15 @@ class Device(ABC):
     def aldb(self):
         """Return the device All-Link Database."""
         return self._aldb
+
+    @property
+    def cleanup_done(self):
+        """Event set unless the device is running its All-Link cleanup."""
+        return self._cleanup_manager.cleanup_done
+
+    def close(self):
+        """Release the device's managers (unsubscribe from message topics)."""
+        self._cleanup_manager.close()
 
     @property
     def operating_flags(self):

@@ -57,6 +57,7 @@ class BatteryDeviceBase:
 
     def close(self):
         """Close the command listener."""
+        super().close()
         self._commands_queue.put_nowait((None, None))
 
     async def async_status(self, group=None):

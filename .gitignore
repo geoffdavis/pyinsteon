@@ -107,3 +107,4 @@ ENV/
 /.pypirc
 /settings.json
 /.idea
+.venv/
