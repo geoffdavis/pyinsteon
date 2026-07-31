@@ -124,6 +124,19 @@ class TestNoSendDuringCleanup(unittest.TestCase):
             keepawake = [s for s in self.sent if s.get("data2") == 0x04]
             assert keepawake, "battery keep-awake not sent after cleanup completed"
 
+    @async_case
+    async def test_close_unregisters_cleanup_event(self):
+        """Closing a device unsubscribes and drops its cleanup event (hygiene)."""
+        from pyinsteon.managers.cleanup_manager import get_cleanup_event
+
+        addr = random_address()
+        device = GeneralController_MiniRemote_4(
+            address=addr, cat=0x00, subcat=0x10, description="Mini Remote"
+        )
+        assert get_cleanup_event(addr) is not None
+        device.close()
+        assert get_cleanup_event(addr) is None
+
 
 if __name__ == "__main__":
     unittest.main()

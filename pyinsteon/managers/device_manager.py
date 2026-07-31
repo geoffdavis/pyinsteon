@@ -63,7 +63,9 @@ class DeviceManager(SubscriberBase):
         if device is None:
             _LOGGER.info("Removing device from INSTEON devices list: %s", address.id)
             if address in self._devices:
-                self._devices.pop(address)
+                removed = self._devices.pop(address)
+                if hasattr(removed, "close"):
+                    removed.close()
                 self._call_subscribers(address=address.id, action=DeviceAction.REMOVED)
             return
 

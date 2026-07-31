@@ -139,6 +139,10 @@ class Device(ABC):
         """Event set unless the device is running its All-Link cleanup."""
         return self._cleanup_manager.cleanup_done
 
+    def close(self):
+        """Release the device's managers (unsubscribe from message topics)."""
+        self._cleanup_manager.close()
+
     @property
     def operating_flags(self):
         """Return the Operating Flags."""
