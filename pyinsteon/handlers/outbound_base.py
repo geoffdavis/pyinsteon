@@ -45,6 +45,15 @@ class OutboundHandlerBase(InboundHandlerBase):
     async def async_send(self, **kwargs):
         """Send the message and wait for a status."""
         async with self._send_lock:
+            # Do not transmit to a device while it is running its All-Link cleanup;
+            # any transmission aborts the cleanup and the device ignores it (#83).
+            if self._address is not None:
+                # pylint: disable=import-outside-toplevel
+                from ..managers.cleanup_manager import get_cleanup_event
+
+                cleanup_done = get_cleanup_event(self._address)
+                if cleanup_done is not None:
+                    await cleanup_done.wait()
             # Empty the message queue
             while not self._message_response.empty():
                 try:
